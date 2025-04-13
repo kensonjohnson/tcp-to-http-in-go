@@ -22,19 +22,22 @@ type RequestLine struct {
 type state int
 
 const (
-	initialized state = iota
-	done
+	requestStateInitialized state = iota
+	requestStateDone
 )
 
-const bufferSize = 8
+const (
+	clrf       = "\r\n"
+	bufferSize = 8
+)
 
 func RequestFromReader(reader io.Reader) (*Request, error) {
 	buf := make([]byte, bufferSize, bufferSize)
 	readToIndex := 0
-	r := &Request{
-		state: initialized,
+	req := &Request{
+		state: requestStateInitialized,
 	}
-	for r.state != done {
+	for req.state != requestStateDone {
 		// If buffer is too small, double it
 		if readToIndex >= len(buf) {
 			tempBuf := make([]byte, 2*len(buf), 2*len(buf))
@@ -45,12 +48,15 @@ func RequestFromReader(reader io.Reader) (*Request, error) {
 		// Read new bytes AFTER what has been read
 		nBytesRead, err := reader.Read(buf[readToIndex:])
 		if err != nil {
-			// TODO: expand what errors can be caught
-			return r, err
+			if errors.Is(err, io.EOF) {
+				req.state = requestStateDone
+				break
+			}
+			return nil, err
 		}
 		readToIndex += nBytesRead
 
-		nBytesParsed, err := r.parse(buf[:readToIndex])
+		nBytesParsed, err := req.parse(buf[:readToIndex])
 		if err != nil {
 			return nil, err
 		}
@@ -61,11 +67,11 @@ func RequestFromReader(reader io.Reader) (*Request, error) {
 			readToIndex -= nBytesParsed
 		}
 	}
-	return r, nil
+	return req, nil
 }
 
 func parseRequestLine(data []byte) (*RequestLine, int, error) {
-	idx := bytes.Index(data, []byte("\r\n"))
+	idx := bytes.Index(data, []byte(clrf))
 	if idx == -1 {
 		return nil, 0, nil
 	}
@@ -110,7 +116,7 @@ func (r *Request) parse(data []byte) (int, error) {
 	}
 
 	// Update Request
-	r.state = done
+	r.state = requestStateDone
 	r.RequestLine = *requestLine
 
 	// Return the number of bytes parsed successfully
