@@ -39,7 +39,7 @@ func TestParse(t *testing.T) {
 	assert.Equal(t, "Bearer ABCD", headers.Get("Authorization"))
 	assert.Equal(t, 28, n)
 	assert.False(t, done)
-	copy(data, data[28:])
+	copy(data, data[28:]) // clear parsed data
 	n, done, err = headers.Parse(data)
 	require.NoError(t, err)
 	require.NotNil(t, headers)
@@ -48,12 +48,30 @@ func TestParse(t *testing.T) {
 	assert.False(t, done)
 
 	// Valid done
-	copy(data, data[26:])
+	headers = NewHeaders()
+	data = []byte("Host: localhost:42069\r\n\r\n")
+	n, done, err = headers.Parse(data)
+	require.NoError(t, err)
+	require.NotNil(t, headers)
+	assert.Equal(t, 23, n)
+	assert.False(t, done)
+	copy(data, data[23:]) // clear parsed data
 	n, done, err = headers.Parse(data)
 	require.NoError(t, err)
 	require.NotNil(t, headers)
 	assert.Equal(t, 2, n)
 	assert.True(t, done)
+
+	// Valid 2 headers with same keys
+	headers = NewHeaders()
+	headers.Set("Set-Message", "Blue")
+	data = []byte("Set-Message: Green\r\n\r\n")
+	n, done, err = headers.Parse(data)
+	require.NoError(t, err)
+	require.NotNil(t, headers)
+	assert.Equal(t, "Blue, Green", headers.Get("Set-Message"))
+	assert.Equal(t, 20, n)
+	assert.False(t, done)
 
 	// Test: Invalid spacing header
 	headers = NewHeaders()
