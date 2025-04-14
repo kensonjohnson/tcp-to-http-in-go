@@ -21,7 +21,12 @@ func (h Headers) Get(key string) string {
 }
 
 func (h Headers) Set(key, value string) {
-	h[strings.ToLower(key)] = value
+	// NOTE: Perhaps de-dupe values using a set?
+	keyLowered := strings.ToLower(key)
+	if v, ok := h[keyLowered]; ok {
+		value = v + ", " + value
+	}
+	h[keyLowered] = value
 }
 
 func (h Headers) Parse(data []byte) (n int, done bool, err error) {
@@ -49,6 +54,7 @@ func (h Headers) Parse(data []byte) (n int, done bool, err error) {
 	key := string(keyBuffer)
 	// Whitespace is allowed before the key, but not after
 	key = strings.TrimLeft(key, " ")
+
 	// Only allow letters, digits, and specific special characters.
 	validKey := regexp.MustCompile(`^[a-zA-Z0-9!@#$%&'\*+-~]+$`).MatchString
 	if !validKey(key) {
