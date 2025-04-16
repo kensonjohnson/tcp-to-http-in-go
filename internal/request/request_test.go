@@ -138,8 +138,8 @@ func TestParseHeaders(t *testing.T) {
 			"Host: localhost:42069\r\n" +
 			"User-Agent: curl/7.81.0\r\n" +
 			"Accept: */*\r\n" +
-			"Some-State: Green" +
-			"Some-State: Blue" +
+			"Some-State: Green\r\n" +
+			"Some-State: Blue\r\n" +
 			"\r\n",
 		numBytesPerRead: 6,
 	}
