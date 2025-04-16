@@ -3,13 +3,16 @@ package request
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"io"
 	"regexp"
 	"strings"
+	"tcp-to-http/internal/headers"
 )
 
 type Request struct {
 	RequestLine RequestLine
+	Headers     headers.Headers
 	state       state
 }
 
@@ -23,6 +26,7 @@ type state int
 
 const (
 	requestStateInitialized state = iota
+	requestStateParsingHeaders
 	requestStateDone
 )
 
@@ -35,7 +39,8 @@ func RequestFromReader(reader io.Reader) (*Request, error) {
 	buf := make([]byte, bufferSize, bufferSize)
 	readToIndex := 0
 	req := &Request{
-		state: requestStateInitialized,
+		state:   requestStateInitialized,
+		Headers: headers.NewHeaders(),
 	}
 	for req.state != requestStateDone {
 		// If buffer is too small, double it
@@ -105,20 +110,53 @@ func parseRequestLine(data []byte) (*RequestLine, int, error) {
 }
 
 func (r *Request) parse(data []byte) (int, error) {
-	requestLine, bytesParsed, err := parseRequestLine(data)
-	if err != nil {
-		return bytesParsed, err
+	totalBytesParsed := 0
+	// Buffer could have many lines of data in it, attempt to parse as
+	// many as possible.
+	for r.state != requestStateDone {
+		n, err := r.parseSingle(data[totalBytesParsed:])
+		if err != nil {
+			return 0, err
+		}
+		totalBytesParsed += n
+		if n == 0 {
+			break
+		}
 	}
+	return totalBytesParsed, nil
+}
 
-	// If more data needed
-	if bytesParsed == 0 {
-		return 0, nil
+func (r *Request) parseSingle(data []byte) (int, error) {
+	switch r.state {
+	case requestStateInitialized:
+		requestLine, bytesParsed, err := parseRequestLine(data)
+		if err != nil {
+			return 0, err
+		}
+
+		// If more data needed
+		if bytesParsed == 0 {
+			return 0, nil
+		}
+
+		// Update Request
+		r.state = requestStateParsingHeaders
+		r.RequestLine = *requestLine
+
+		// Return the number of bytes parsed successfully
+		return bytesParsed, nil
+	case requestStateParsingHeaders:
+		n, done, err := r.Headers.Parse(data)
+		if err != nil {
+			return 0, errors.New(fmt.Sprintf("error when parsing headers: %v", err))
+		}
+		if done {
+			r.state = requestStateDone
+		}
+		return n, nil
+	case requestStateDone:
+		return 0, errors.New("trying to parse after 'done' state")
+	default:
+		return 0, errors.New("parser encountered unknown state")
 	}
-
-	// Update Request
-	r.state = requestStateDone
-	r.RequestLine = *requestLine
-
-	// Return the number of bytes parsed successfully
-	return bytesParsed, nil
 }
