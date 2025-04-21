@@ -6,7 +6,7 @@ help:
   just --list --unsorted
 
 run:
-  go run ./cmd/tcplistener/
+  go run ./cmd/httpserver
 
 test:
   go test ./...
