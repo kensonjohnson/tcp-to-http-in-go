@@ -16,16 +16,29 @@ func NewHeaders() Headers {
 	return Headers{}
 }
 
+// Takes a case insensitive key and returns the value if key in headers.
+// Returns empty string if key does not exist.
 func (h Headers) Get(key string) string {
 	return h[strings.ToLower(key)]
 }
 
+// Takes a key and value pair to add to the headers. The key will be treated
+// as case insensitive. If key already exists, the value will be appended to
+// to the previous value, delimited by a comma.
 func (h Headers) Set(key, value string) {
 	// NOTE: Perhaps de-dupe values using a set?
 	keyLowered := strings.ToLower(key)
 	if v, ok := h[keyLowered]; ok {
 		value = v + ", " + value
 	}
+	h[keyLowered] = value
+}
+
+// Takes a key and value pair to add to the headers. The key will be treated
+// as case insensitive. If the key already exists, previous value will be
+// overwritten.
+func (h Headers) Replace(key, value string) {
+	keyLowered := strings.ToLower(key)
 	h[keyLowered] = value
 }
 
