@@ -1,25 +1,29 @@
 package server
 
 import (
+	"bytes"
 	"fmt"
 	"log"
 	"net"
 	"sync/atomic"
+	"tcp-to-http/internal/request"
 	"tcp-to-http/internal/response"
 )
 
 type Server struct {
 	listener net.Listener
 	closed   atomic.Bool
+	handler  Handler
 }
 
-func Serve(port int) (*Server, error) {
+func Serve(port int, handler Handler) (*Server, error) {
 	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
 	if err != nil {
 		return nil, err
 	}
 
 	s := &Server{
+		handler:  handler,
 		listener: listener,
 	}
 
@@ -42,18 +46,35 @@ func (s *Server) listen() {
 			if s.closed.Load() {
 				return
 			}
-			log.Printf("Error in listener: %s\n", err)
+			log.Printf("Error in listen: %s\n", err)
 			continue
 		}
-		fmt.Println("Connection accepted from:", conn.RemoteAddr())
 		go s.handle(conn)
 	}
 }
 
 func (s *Server) handle(conn net.Conn) {
 	defer conn.Close()
-	response.WriteStatusLine(conn, 200)
-	h := response.GetDefaultHeaders(0)
+	req, err := request.RequestFromReader(conn)
+	if err != nil {
+		herr := &HandlerError{
+			StatusCode: response.StatusBadRequest,
+			Message:    err.Error(),
+		}
+		herr.Write(conn)
+		return
+	}
+
+	buf := bytes.NewBuffer([]byte{})
+	herr := s.handler(buf, req)
+	if herr != nil {
+		herr.Write(conn)
+		return
+	}
+
+	b := buf.Bytes()
+	response.WriteStatusLine(conn, response.StatusOK)
+	h := response.GetDefaultHeaders(len(b))
 	response.WriteHeaders(conn, h)
-	fmt.Println("Connection closed with:", conn.RemoteAddr())
+	conn.Write(b)
 }
